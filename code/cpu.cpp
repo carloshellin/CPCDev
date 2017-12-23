@@ -1,0 +1,2446 @@
+#include "cpu.h"
+
+#define SIGNFLAG  0x80
+#define ZEROFLAG 0x40
+#define HALFCARRYFLAG 0x10
+#define PARITYFLAG  0x04
+#define OVERFLOWFLAG  0x04 
+#define NEGATIVEFLAG  0x02
+#define CARRYFLAG  0x01
+#define UNUSEDFLAGS 0x28
+
+uint16 DAATable[2048] =
+{
+	0x0044, 0x0100, 0x0200, 0x0304, 0x0400, 0x0504, 0x0604, 0x0700,
+	0x0808, 0x090C, 0x1010, 0x1114, 0x1214, 0x1310, 0x1414, 0x1510,
+	0x1000, 0x1104, 0x1204, 0x1300, 0x1404, 0x1500, 0x1600, 0x1704,
+	0x180C, 0x1908, 0x2030, 0x2134, 0x2234, 0x2330, 0x2434, 0x2530,
+	0x2020, 0x2124, 0x2224, 0x2320, 0x2424, 0x2520, 0x2620, 0x2724,
+	0x282C, 0x2928, 0x3034, 0x3130, 0x3230, 0x3334, 0x3430, 0x3534,
+	0x3024, 0x3120, 0x3220, 0x3324, 0x3420, 0x3524, 0x3624, 0x3720,
+	0x3828, 0x392C, 0x4010, 0x4114, 0x4214, 0x4310, 0x4414, 0x4510,
+	0x4000, 0x4104, 0x4204, 0x4300, 0x4404, 0x4500, 0x4600, 0x4704,
+	0x480C, 0x4908, 0x5014, 0x5110, 0x5210, 0x5314, 0x5410, 0x5514,
+	0x5004, 0x5100, 0x5200, 0x5304, 0x5400, 0x5504, 0x5604, 0x5700,
+	0x5808, 0x590C, 0x6034, 0x6130, 0x6230, 0x6334, 0x6430, 0x6534,
+	0x6024, 0x6120, 0x6220, 0x6324, 0x6420, 0x6524, 0x6624, 0x6720,
+	0x6828, 0x692C, 0x7030, 0x7134, 0x7234, 0x7330, 0x7434, 0x7530,
+	0x7020, 0x7124, 0x7224, 0x7320, 0x7424, 0x7520, 0x7620, 0x7724,
+	0x782C, 0x7928, 0x8090, 0x8194, 0x8294, 0x8390, 0x8494, 0x8590,
+	0x8080, 0x8184, 0x8284, 0x8380, 0x8484, 0x8580, 0x8680, 0x8784,
+	0x888C, 0x8988, 0x9094, 0x9190, 0x9290, 0x9394, 0x9490, 0x9594,
+	0x9084, 0x9180, 0x9280, 0x9384, 0x9480, 0x9584, 0x9684, 0x9780,
+	0x9888, 0x998C, 0x0055, 0x0111, 0x0211, 0x0315, 0x0411, 0x0515,
+	0x0045, 0x0101, 0x0201, 0x0305, 0x0401, 0x0505, 0x0605, 0x0701,
+	0x0809, 0x090D, 0x1011, 0x1115, 0x1215, 0x1311, 0x1415, 0x1511,
+	0x1001, 0x1105, 0x1205, 0x1301, 0x1405, 0x1501, 0x1601, 0x1705,
+	0x180D, 0x1909, 0x2031, 0x2135, 0x2235, 0x2331, 0x2435, 0x2531,
+	0x2021, 0x2125, 0x2225, 0x2321, 0x2425, 0x2521, 0x2621, 0x2725,
+	0x282D, 0x2929, 0x3035, 0x3131, 0x3231, 0x3335, 0x3431, 0x3535,
+	0x3025, 0x3121, 0x3221, 0x3325, 0x3421, 0x3525, 0x3625, 0x3721,
+	0x3829, 0x392D, 0x4011, 0x4115, 0x4215, 0x4311, 0x4415, 0x4511,
+	0x4001, 0x4105, 0x4205, 0x4301, 0x4405, 0x4501, 0x4601, 0x4705,
+	0x480D, 0x4909, 0x5015, 0x5111, 0x5211, 0x5315, 0x5411, 0x5515,
+	0x5005, 0x5101, 0x5201, 0x5305, 0x5401, 0x5505, 0x5605, 0x5701,
+	0x5809, 0x590D, 0x6035, 0x6131, 0x6231, 0x6335, 0x6431, 0x6535,
+	0x6025, 0x6121, 0x6221, 0x6325, 0x6421, 0x6525, 0x6625, 0x6721,
+	0x6829, 0x692D, 0x7031, 0x7135, 0x7235, 0x7331, 0x7435, 0x7531,
+	0x7021, 0x7125, 0x7225, 0x7321, 0x7425, 0x7521, 0x7621, 0x7725,
+	0x782D, 0x7929, 0x8091, 0x8195, 0x8295, 0x8391, 0x8495, 0x8591,
+	0x8081, 0x8185, 0x8285, 0x8381, 0x8485, 0x8581, 0x8681, 0x8785,
+	0x888D, 0x8989, 0x9095, 0x9191, 0x9291, 0x9395, 0x9491, 0x9595,
+	0x9085, 0x9181, 0x9281, 0x9385, 0x9481, 0x9585, 0x9685, 0x9781,
+	0x9889, 0x998D, 0xA0B5, 0xA1B1, 0xA2B1, 0xA3B5, 0xA4B1, 0xA5B5,
+	0xA0A5, 0xA1A1, 0xA2A1, 0xA3A5, 0xA4A1, 0xA5A5, 0xA6A5, 0xA7A1,
+	0xA8A9, 0xA9AD, 0xB0B1, 0xB1B5, 0xB2B5, 0xB3B1, 0xB4B5, 0xB5B1,
+	0xB0A1, 0xB1A5, 0xB2A5, 0xB3A1, 0xB4A5, 0xB5A1, 0xB6A1, 0xB7A5,
+	0xB8AD, 0xB9A9, 0xC095, 0xC191, 0xC291, 0xC395, 0xC491, 0xC595,
+	0xC085, 0xC181, 0xC281, 0xC385, 0xC481, 0xC585, 0xC685, 0xC781,
+	0xC889, 0xC98D, 0xD091, 0xD195, 0xD295, 0xD391, 0xD495, 0xD591,
+	0xD081, 0xD185, 0xD285, 0xD381, 0xD485, 0xD581, 0xD681, 0xD785,
+	0xD88D, 0xD989, 0xE0B1, 0xE1B5, 0xE2B5, 0xE3B1, 0xE4B5, 0xE5B1,
+	0xE0A1, 0xE1A5, 0xE2A5, 0xE3A1, 0xE4A5, 0xE5A1, 0xE6A1, 0xE7A5,
+	0xE8AD, 0xE9A9, 0xF0B5, 0xF1B1, 0xF2B1, 0xF3B5, 0xF4B1, 0xF5B5,
+	0xF0A5, 0xF1A1, 0xF2A1, 0xF3A5, 0xF4A1, 0xF5A5, 0xF6A5, 0xF7A1,
+	0xF8A9, 0xF9AD, 0x0055, 0x0111, 0x0211, 0x0315, 0x0411, 0x0515,
+	0x0045, 0x0101, 0x0201, 0x0305, 0x0401, 0x0505, 0x0605, 0x0701,
+	0x0809, 0x090D, 0x1011, 0x1115, 0x1215, 0x1311, 0x1415, 0x1511,
+	0x1001, 0x1105, 0x1205, 0x1301, 0x1405, 0x1501, 0x1601, 0x1705,
+	0x180D, 0x1909, 0x2031, 0x2135, 0x2235, 0x2331, 0x2435, 0x2531,
+	0x2021, 0x2125, 0x2225, 0x2321, 0x2425, 0x2521, 0x2621, 0x2725,
+	0x282D, 0x2929, 0x3035, 0x3131, 0x3231, 0x3335, 0x3431, 0x3535,
+	0x3025, 0x3121, 0x3221, 0x3325, 0x3421, 0x3525, 0x3625, 0x3721,
+	0x3829, 0x392D, 0x4011, 0x4115, 0x4215, 0x4311, 0x4415, 0x4511,
+	0x4001, 0x4105, 0x4205, 0x4301, 0x4405, 0x4501, 0x4601, 0x4705,
+	0x480D, 0x4909, 0x5015, 0x5111, 0x5211, 0x5315, 0x5411, 0x5515,
+	0x5005, 0x5101, 0x5201, 0x5305, 0x5401, 0x5505, 0x5605, 0x5701,
+	0x5809, 0x590D, 0x6035, 0x6131, 0x6231, 0x6335, 0x6431, 0x6535,
+	0x0046, 0x0102, 0x0202, 0x0306, 0x0402, 0x0506, 0x0606, 0x0702,
+	0x080A, 0x090E, 0x0402, 0x0506, 0x0606, 0x0702, 0x080A, 0x090E,
+	0x1002, 0x1106, 0x1206, 0x1302, 0x1406, 0x1502, 0x1602, 0x1706,
+	0x180E, 0x190A, 0x1406, 0x1502, 0x1602, 0x1706, 0x180E, 0x190A,
+	0x2022, 0x2126, 0x2226, 0x2322, 0x2426, 0x2522, 0x2622, 0x2726,
+	0x282E, 0x292A, 0x2426, 0x2522, 0x2622, 0x2726, 0x282E, 0x292A,
+	0x3026, 0x3122, 0x3222, 0x3326, 0x3422, 0x3526, 0x3626, 0x3722,
+	0x382A, 0x392E, 0x3422, 0x3526, 0x3626, 0x3722, 0x382A, 0x392E,
+	0x4002, 0x4106, 0x4206, 0x4302, 0x4406, 0x4502, 0x4602, 0x4706,
+	0x480E, 0x490A, 0x4406, 0x4502, 0x4602, 0x4706, 0x480E, 0x490A,
+	0x5006, 0x5102, 0x5202, 0x5306, 0x5402, 0x5506, 0x5606, 0x5702,
+	0x580A, 0x590E, 0x5402, 0x5506, 0x5606, 0x5702, 0x580A, 0x590E,
+	0x6026, 0x6122, 0x6222, 0x6326, 0x6422, 0x6526, 0x6626, 0x6722,
+	0x682A, 0x692E, 0x6422, 0x6526, 0x6626, 0x6722, 0x682A, 0x692E,
+	0x7022, 0x7126, 0x7226, 0x7322, 0x7426, 0x7522, 0x7622, 0x7726,
+	0x782E, 0x792A, 0x7426, 0x7522, 0x7622, 0x7726, 0x782E, 0x792A,
+	0x8082, 0x8186, 0x8286, 0x8382, 0x8486, 0x8582, 0x8682, 0x8786,
+	0x888E, 0x898A, 0x8486, 0x8582, 0x8682, 0x8786, 0x888E, 0x898A,
+	0x9086, 0x9182, 0x9282, 0x9386, 0x9482, 0x9586, 0x9686, 0x9782,
+	0x988A, 0x998E, 0x3423, 0x3527, 0x3627, 0x3723, 0x382B, 0x392F,
+	0x4003, 0x4107, 0x4207, 0x4303, 0x4407, 0x4503, 0x4603, 0x4707,
+	0x480F, 0x490B, 0x4407, 0x4503, 0x4603, 0x4707, 0x480F, 0x490B,
+	0x5007, 0x5103, 0x5203, 0x5307, 0x5403, 0x5507, 0x5607, 0x5703,
+	0x580B, 0x590F, 0x5403, 0x5507, 0x5607, 0x5703, 0x580B, 0x590F,
+	0x6027, 0x6123, 0x6223, 0x6327, 0x6423, 0x6527, 0x6627, 0x6723,
+	0x682B, 0x692F, 0x6423, 0x6527, 0x6627, 0x6723, 0x682B, 0x692F,
+	0x7023, 0x7127, 0x7227, 0x7323, 0x7427, 0x7523, 0x7623, 0x7727,
+	0x782F, 0x792B, 0x7427, 0x7523, 0x7623, 0x7727, 0x782F, 0x792B,
+	0x8083, 0x8187, 0x8287, 0x8383, 0x8487, 0x8583, 0x8683, 0x8787,
+	0x888F, 0x898B, 0x8487, 0x8583, 0x8683, 0x8787, 0x888F, 0x898B,
+	0x9087, 0x9183, 0x9283, 0x9387, 0x9483, 0x9587, 0x9687, 0x9783,
+	0x988B, 0x998F, 0x9483, 0x9587, 0x9687, 0x9783, 0x988B, 0x998F,
+	0xA0A7, 0xA1A3, 0xA2A3, 0xA3A7, 0xA4A3, 0xA5A7, 0xA6A7, 0xA7A3,
+	0xA8AB, 0xA9AF, 0xA4A3, 0xA5A7, 0xA6A7, 0xA7A3, 0xA8AB, 0xA9AF,
+	0xB0A3, 0xB1A7, 0xB2A7, 0xB3A3, 0xB4A7, 0xB5A3, 0xB6A3, 0xB7A7,
+	0xB8AF, 0xB9AB, 0xB4A7, 0xB5A3, 0xB6A3, 0xB7A7, 0xB8AF, 0xB9AB,
+	0xC087, 0xC183, 0xC283, 0xC387, 0xC483, 0xC587, 0xC687, 0xC783,
+	0xC88B, 0xC98F, 0xC483, 0xC587, 0xC687, 0xC783, 0xC88B, 0xC98F,
+	0xD083, 0xD187, 0xD287, 0xD383, 0xD487, 0xD583, 0xD683, 0xD787,
+	0xD88F, 0xD98B, 0xD487, 0xD583, 0xD683, 0xD787, 0xD88F, 0xD98B,
+	0xE0A3, 0xE1A7, 0xE2A7, 0xE3A3, 0xE4A7, 0xE5A3, 0xE6A3, 0xE7A7,
+	0xE8AF, 0xE9AB, 0xE4A7, 0xE5A3, 0xE6A3, 0xE7A7, 0xE8AF, 0xE9AB,
+	0xF0A7, 0xF1A3, 0xF2A3, 0xF3A7, 0xF4A3, 0xF5A7, 0xF6A7, 0xF7A3,
+	0xF8AB, 0xF9AF, 0xF4A3, 0xF5A7, 0xF6A7, 0xF7A3, 0xF8AB, 0xF9AF,
+	0x0047, 0x0103, 0x0203, 0x0307, 0x0403, 0x0507, 0x0607, 0x0703,
+	0x080B, 0x090F, 0x0403, 0x0507, 0x0607, 0x0703, 0x080B, 0x090F,
+	0x1003, 0x1107, 0x1207, 0x1303, 0x1407, 0x1503, 0x1603, 0x1707,
+	0x180F, 0x190B, 0x1407, 0x1503, 0x1603, 0x1707, 0x180F, 0x190B,
+	0x2023, 0x2127, 0x2227, 0x2323, 0x2427, 0x2523, 0x2623, 0x2727,
+	0x282F, 0x292B, 0x2427, 0x2523, 0x2623, 0x2727, 0x282F, 0x292B,
+	0x3027, 0x3123, 0x3223, 0x3327, 0x3423, 0x3527, 0x3627, 0x3723,
+	0x382B, 0x392F, 0x3423, 0x3527, 0x3627, 0x3723, 0x382B, 0x392F,
+	0x4003, 0x4107, 0x4207, 0x4303, 0x4407, 0x4503, 0x4603, 0x4707,
+	0x480F, 0x490B, 0x4407, 0x4503, 0x4603, 0x4707, 0x480F, 0x490B,
+	0x5007, 0x5103, 0x5203, 0x5307, 0x5403, 0x5507, 0x5607, 0x5703,
+	0x580B, 0x590F, 0x5403, 0x5507, 0x5607, 0x5703, 0x580B, 0x590F,
+	0x6027, 0x6123, 0x6223, 0x6327, 0x6423, 0x6527, 0x6627, 0x6723,
+	0x682B, 0x692F, 0x6423, 0x6527, 0x6627, 0x6723, 0x682B, 0x692F,
+	0x7023, 0x7127, 0x7227, 0x7323, 0x7427, 0x7523, 0x7623, 0x7727,
+	0x782F, 0x792B, 0x7427, 0x7523, 0x7623, 0x7727, 0x782F, 0x792B,
+	0x8083, 0x8187, 0x8287, 0x8383, 0x8487, 0x8583, 0x8683, 0x8787,
+	0x888F, 0x898B, 0x8487, 0x8583, 0x8683, 0x8787, 0x888F, 0x898B,
+	0x9087, 0x9183, 0x9283, 0x9387, 0x9483, 0x9587, 0x9687, 0x9783,
+	0x988B, 0x998F, 0x9483, 0x9587, 0x9687, 0x9783, 0x988B, 0x998F,
+	0x0604, 0x0700, 0x0808, 0x090C, 0x0A0C, 0x0B08, 0x0C0C, 0x0D08,
+	0x0E08, 0x0F0C, 0x1010, 0x1114, 0x1214, 0x1310, 0x1414, 0x1510,
+	0x1600, 0x1704, 0x180C, 0x1908, 0x1A08, 0x1B0C, 0x1C08, 0x1D0C,
+	0x1E0C, 0x1F08, 0x2030, 0x2134, 0x2234, 0x2330, 0x2434, 0x2530,
+	0x2620, 0x2724, 0x282C, 0x2928, 0x2A28, 0x2B2C, 0x2C28, 0x2D2C,
+	0x2E2C, 0x2F28, 0x3034, 0x3130, 0x3230, 0x3334, 0x3430, 0x3534,
+	0x3624, 0x3720, 0x3828, 0x392C, 0x3A2C, 0x3B28, 0x3C2C, 0x3D28,
+	0x3E28, 0x3F2C, 0x4010, 0x4114, 0x4214, 0x4310, 0x4414, 0x4510,
+	0x4600, 0x4704, 0x480C, 0x4908, 0x4A08, 0x4B0C, 0x4C08, 0x4D0C,
+	0x4E0C, 0x4F08, 0x5014, 0x5110, 0x5210, 0x5314, 0x5410, 0x5514,
+	0x5604, 0x5700, 0x5808, 0x590C, 0x5A0C, 0x5B08, 0x5C0C, 0x5D08,
+	0x5E08, 0x5F0C, 0x6034, 0x6130, 0x6230, 0x6334, 0x6430, 0x6534,
+	0x6624, 0x6720, 0x6828, 0x692C, 0x6A2C, 0x6B28, 0x6C2C, 0x6D28,
+	0x6E28, 0x6F2C, 0x7030, 0x7134, 0x7234, 0x7330, 0x7434, 0x7530,
+	0x7620, 0x7724, 0x782C, 0x7928, 0x7A28, 0x7B2C, 0x7C28, 0x7D2C,
+	0x7E2C, 0x7F28, 0x8090, 0x8194, 0x8294, 0x8390, 0x8494, 0x8590,
+	0x8680, 0x8784, 0x888C, 0x8988, 0x8A88, 0x8B8C, 0x8C88, 0x8D8C,
+	0x8E8C, 0x8F88, 0x9094, 0x9190, 0x9290, 0x9394, 0x9490, 0x9594,
+	0x9684, 0x9780, 0x9888, 0x998C, 0x9A8C, 0x9B88, 0x9C8C, 0x9D88,
+	0x9E88, 0x9F8C, 0x0055, 0x0111, 0x0211, 0x0315, 0x0411, 0x0515,
+	0x0605, 0x0701, 0x0809, 0x090D, 0x0A0D, 0x0B09, 0x0C0D, 0x0D09,
+	0x0E09, 0x0F0D, 0x1011, 0x1115, 0x1215, 0x1311, 0x1415, 0x1511,
+	0x1601, 0x1705, 0x180D, 0x1909, 0x1A09, 0x1B0D, 0x1C09, 0x1D0D,
+	0x1E0D, 0x1F09, 0x2031, 0x2135, 0x2235, 0x2331, 0x2435, 0x2531,
+	0x2621, 0x2725, 0x282D, 0x2929, 0x2A29, 0x2B2D, 0x2C29, 0x2D2D,
+	0x2E2D, 0x2F29, 0x3035, 0x3131, 0x3231, 0x3335, 0x3431, 0x3535,
+	0x3625, 0x3721, 0x3829, 0x392D, 0x3A2D, 0x3B29, 0x3C2D, 0x3D29,
+	0x3E29, 0x3F2D, 0x4011, 0x4115, 0x4215, 0x4311, 0x4415, 0x4511,
+	0x4601, 0x4705, 0x480D, 0x4909, 0x4A09, 0x4B0D, 0x4C09, 0x4D0D,
+	0x4E0D, 0x4F09, 0x5015, 0x5111, 0x5211, 0x5315, 0x5411, 0x5515,
+	0x5605, 0x5701, 0x5809, 0x590D, 0x5A0D, 0x5B09, 0x5C0D, 0x5D09,
+	0x5E09, 0x5F0D, 0x6035, 0x6131, 0x6231, 0x6335, 0x6431, 0x6535,
+	0x6625, 0x6721, 0x6829, 0x692D, 0x6A2D, 0x6B29, 0x6C2D, 0x6D29,
+	0x6E29, 0x6F2D, 0x7031, 0x7135, 0x7235, 0x7331, 0x7435, 0x7531,
+	0x7621, 0x7725, 0x782D, 0x7929, 0x7A29, 0x7B2D, 0x7C29, 0x7D2D,
+	0x7E2D, 0x7F29, 0x8091, 0x8195, 0x8295, 0x8391, 0x8495, 0x8591,
+	0x8681, 0x8785, 0x888D, 0x8989, 0x8A89, 0x8B8D, 0x8C89, 0x8D8D,
+	0x8E8D, 0x8F89, 0x9095, 0x9191, 0x9291, 0x9395, 0x9491, 0x9595,
+	0x9685, 0x9781, 0x9889, 0x998D, 0x9A8D, 0x9B89, 0x9C8D, 0x9D89,
+	0x9E89, 0x9F8D, 0xA0B5, 0xA1B1, 0xA2B1, 0xA3B5, 0xA4B1, 0xA5B5,
+	0xA6A5, 0xA7A1, 0xA8A9, 0xA9AD, 0xAAAD, 0xABA9, 0xACAD, 0xADA9,
+	0xAEA9, 0xAFAD, 0xB0B1, 0xB1B5, 0xB2B5, 0xB3B1, 0xB4B5, 0xB5B1,
+	0xB6A1, 0xB7A5, 0xB8AD, 0xB9A9, 0xBAA9, 0xBBAD, 0xBCA9, 0xBDAD,
+	0xBEAD, 0xBFA9, 0xC095, 0xC191, 0xC291, 0xC395, 0xC491, 0xC595,
+	0xC685, 0xC781, 0xC889, 0xC98D, 0xCA8D, 0xCB89, 0xCC8D, 0xCD89,
+	0xCE89, 0xCF8D, 0xD091, 0xD195, 0xD295, 0xD391, 0xD495, 0xD591,
+	0xD681, 0xD785, 0xD88D, 0xD989, 0xDA89, 0xDB8D, 0xDC89, 0xDD8D,
+	0xDE8D, 0xDF89, 0xE0B1, 0xE1B5, 0xE2B5, 0xE3B1, 0xE4B5, 0xE5B1,
+	0xE6A1, 0xE7A5, 0xE8AD, 0xE9A9, 0xEAA9, 0xEBAD, 0xECA9, 0xEDAD,
+	0xEEAD, 0xEFA9, 0xF0B5, 0xF1B1, 0xF2B1, 0xF3B5, 0xF4B1, 0xF5B5,
+	0xF6A5, 0xF7A1, 0xF8A9, 0xF9AD, 0xFAAD, 0xFBA9, 0xFCAD, 0xFDA9,
+	0xFEA9, 0xFFAD, 0x0055, 0x0111, 0x0211, 0x0315, 0x0411, 0x0515,
+	0x0605, 0x0701, 0x0809, 0x090D, 0x0A0D, 0x0B09, 0x0C0D, 0x0D09,
+	0x0E09, 0x0F0D, 0x1011, 0x1115, 0x1215, 0x1311, 0x1415, 0x1511,
+	0x1601, 0x1705, 0x180D, 0x1909, 0x1A09, 0x1B0D, 0x1C09, 0x1D0D,
+	0x1E0D, 0x1F09, 0x2031, 0x2135, 0x2235, 0x2331, 0x2435, 0x2531,
+	0x2621, 0x2725, 0x282D, 0x2929, 0x2A29, 0x2B2D, 0x2C29, 0x2D2D,
+	0x2E2D, 0x2F29, 0x3035, 0x3131, 0x3231, 0x3335, 0x3431, 0x3535,
+	0x3625, 0x3721, 0x3829, 0x392D, 0x3A2D, 0x3B29, 0x3C2D, 0x3D29,
+	0x3E29, 0x3F2D, 0x4011, 0x4115, 0x4215, 0x4311, 0x4415, 0x4511,
+	0x4601, 0x4705, 0x480D, 0x4909, 0x4A09, 0x4B0D, 0x4C09, 0x4D0D,
+	0x4E0D, 0x4F09, 0x5015, 0x5111, 0x5211, 0x5315, 0x5411, 0x5515,
+	0x5605, 0x5701, 0x5809, 0x590D, 0x5A0D, 0x5B09, 0x5C0D, 0x5D09,
+	0x5E09, 0x5F0D, 0x6035, 0x6131, 0x6231, 0x6335, 0x6431, 0x6535,
+	0xFABE, 0xFBBA, 0xFCBE, 0xFDBA, 0xFEBA, 0xFFBE, 0x0046, 0x0102,
+	0x0202, 0x0306, 0x0402, 0x0506, 0x0606, 0x0702, 0x080A, 0x090E,
+	0x0A1E, 0x0B1A, 0x0C1E, 0x0D1A, 0x0E1A, 0x0F1E, 0x1002, 0x1106,
+	0x1206, 0x1302, 0x1406, 0x1502, 0x1602, 0x1706, 0x180E, 0x190A,
+	0x1A1A, 0x1B1E, 0x1C1A, 0x1D1E, 0x1E1E, 0x1F1A, 0x2022, 0x2126,
+	0x2226, 0x2322, 0x2426, 0x2522, 0x2622, 0x2726, 0x282E, 0x292A,
+	0x2A3A, 0x2B3E, 0x2C3A, 0x2D3E, 0x2E3E, 0x2F3A, 0x3026, 0x3122,
+	0x3222, 0x3326, 0x3422, 0x3526, 0x3626, 0x3722, 0x382A, 0x392E,
+	0x3A3E, 0x3B3A, 0x3C3E, 0x3D3A, 0x3E3A, 0x3F3E, 0x4002, 0x4106,
+	0x4206, 0x4302, 0x4406, 0x4502, 0x4602, 0x4706, 0x480E, 0x490A,
+	0x4A1A, 0x4B1E, 0x4C1A, 0x4D1E, 0x4E1E, 0x4F1A, 0x5006, 0x5102,
+	0x5202, 0x5306, 0x5402, 0x5506, 0x5606, 0x5702, 0x580A, 0x590E,
+	0x5A1E, 0x5B1A, 0x5C1E, 0x5D1A, 0x5E1A, 0x5F1E, 0x6026, 0x6122,
+	0x6222, 0x6326, 0x6422, 0x6526, 0x6626, 0x6722, 0x682A, 0x692E,
+	0x6A3E, 0x6B3A, 0x6C3E, 0x6D3A, 0x6E3A, 0x6F3E, 0x7022, 0x7126,
+	0x7226, 0x7322, 0x7426, 0x7522, 0x7622, 0x7726, 0x782E, 0x792A,
+	0x7A3A, 0x7B3E, 0x7C3A, 0x7D3E, 0x7E3E, 0x7F3A, 0x8082, 0x8186,
+	0x8286, 0x8382, 0x8486, 0x8582, 0x8682, 0x8786, 0x888E, 0x898A,
+	0x8A9A, 0x8B9E, 0x8C9A, 0x8D9E, 0x8E9E, 0x8F9A, 0x9086, 0x9182,
+	0x9282, 0x9386, 0x3423, 0x3527, 0x3627, 0x3723, 0x382B, 0x392F,
+	0x3A3F, 0x3B3B, 0x3C3F, 0x3D3B, 0x3E3B, 0x3F3F, 0x4003, 0x4107,
+	0x4207, 0x4303, 0x4407, 0x4503, 0x4603, 0x4707, 0x480F, 0x490B,
+	0x4A1B, 0x4B1F, 0x4C1B, 0x4D1F, 0x4E1F, 0x4F1B, 0x5007, 0x5103,
+	0x5203, 0x5307, 0x5403, 0x5507, 0x5607, 0x5703, 0x580B, 0x590F,
+	0x5A1F, 0x5B1B, 0x5C1F, 0x5D1B, 0x5E1B, 0x5F1F, 0x6027, 0x6123,
+	0x6223, 0x6327, 0x6423, 0x6527, 0x6627, 0x6723, 0x682B, 0x692F,
+	0x6A3F, 0x6B3B, 0x6C3F, 0x6D3B, 0x6E3B, 0x6F3F, 0x7023, 0x7127,
+	0x7227, 0x7323, 0x7427, 0x7523, 0x7623, 0x7727, 0x782F, 0x792B,
+	0x7A3B, 0x7B3F, 0x7C3B, 0x7D3F, 0x7E3F, 0x7F3B, 0x8083, 0x8187,
+	0x8287, 0x8383, 0x8487, 0x8583, 0x8683, 0x8787, 0x888F, 0x898B,
+	0x8A9B, 0x8B9F, 0x8C9B, 0x8D9F, 0x8E9F, 0x8F9B, 0x9087, 0x9183,
+	0x9283, 0x9387, 0x9483, 0x9587, 0x9687, 0x9783, 0x988B, 0x998F,
+	0x9A9F, 0x9B9B, 0x9C9F, 0x9D9B, 0x9E9B, 0x9F9F, 0xA0A7, 0xA1A3,
+	0xA2A3, 0xA3A7, 0xA4A3, 0xA5A7, 0xA6A7, 0xA7A3, 0xA8AB, 0xA9AF,
+	0xAABF, 0xABBB, 0xACBF, 0xADBB, 0xAEBB, 0xAFBF, 0xB0A3, 0xB1A7,
+	0xB2A7, 0xB3A3, 0xB4A7, 0xB5A3, 0xB6A3, 0xB7A7, 0xB8AF, 0xB9AB,
+	0xBABB, 0xBBBF, 0xBCBB, 0xBDBF, 0xBEBF, 0xBFBB, 0xC087, 0xC183,
+	0xC283, 0xC387, 0xC483, 0xC587, 0xC687, 0xC783, 0xC88B, 0xC98F,
+	0xCA9F, 0xCB9B, 0xCC9F, 0xCD9B, 0xCE9B, 0xCF9F, 0xD083, 0xD187,
+	0xD287, 0xD383, 0xD487, 0xD583, 0xD683, 0xD787, 0xD88F, 0xD98B,
+	0xDA9B, 0xDB9F, 0xDC9B, 0xDD9F, 0xDE9F, 0xDF9B, 0xE0A3, 0xE1A7,
+	0xE2A7, 0xE3A3, 0xE4A7, 0xE5A3, 0xE6A3, 0xE7A7, 0xE8AF, 0xE9AB,
+	0xEABB, 0xEBBF, 0xECBB, 0xEDBF, 0xEEBF, 0xEFBB, 0xF0A7, 0xF1A3,
+	0xF2A3, 0xF3A7, 0xF4A3, 0xF5A7, 0xF6A7, 0xF7A3, 0xF8AB, 0xF9AF,
+	0xFABF, 0xFBBB, 0xFCBF, 0xFDBB, 0xFEBB, 0xFFBF, 0x0047, 0x0103,
+	0x0203, 0x0307, 0x0403, 0x0507, 0x0607, 0x0703, 0x080B, 0x090F,
+	0x0A1F, 0x0B1B, 0x0C1F, 0x0D1B, 0x0E1B, 0x0F1F, 0x1003, 0x1107,
+	0x1207, 0x1303, 0x1407, 0x1503, 0x1603, 0x1707, 0x180F, 0x190B,
+	0x1A1B, 0x1B1F, 0x1C1B, 0x1D1F, 0x1E1F, 0x1F1B, 0x2023, 0x2127,
+	0x2227, 0x2323, 0x2427, 0x2523, 0x2623, 0x2727, 0x282F, 0x292B,
+	0x2A3B, 0x2B3F, 0x2C3B, 0x2D3F, 0x2E3F, 0x2F3B, 0x3027, 0x3123,
+	0x3223, 0x3327, 0x3423, 0x3527, 0x3627, 0x3723, 0x382B, 0x392F,
+	0x3A3F, 0x3B3B, 0x3C3F, 0x3D3B, 0x3E3B, 0x3F3F, 0x4003, 0x4107,
+	0x4207, 0x4303, 0x4407, 0x4503, 0x4603, 0x4707, 0x480F, 0x490B,
+	0x4A1B, 0x4B1F, 0x4C1B, 0x4D1F, 0x4E1F, 0x4F1B, 0x5007, 0x5103,
+	0x5203, 0x5307, 0x5403, 0x5507, 0x5607, 0x5703, 0x580B, 0x590F,
+	0x5A1F, 0x5B1B, 0x5C1F, 0x5D1B, 0x5E1B, 0x5F1F, 0x6027, 0x6123,
+	0x6223, 0x6327, 0x6423, 0x6527, 0x6627, 0x6723, 0x682B, 0x692F,
+	0x6A3F, 0x6B3B, 0x6C3F, 0x6D3B, 0x6E3B, 0x6F3F, 0x7023, 0x7127,
+	0x7227, 0x7323, 0x7427, 0x7523, 0x7623, 0x7727, 0x782F, 0x792B,
+	0x7A3B, 0x7B3F, 0x7C3B, 0x7D3F, 0x7E3F, 0x7F3B, 0x8083, 0x8187,
+	0x8287, 0x8383, 0x8487, 0x8583, 0x8683, 0x8787, 0x888F, 0x898B,
+	0x8A9B, 0x8B9F, 0x8C9B, 0x8D9F, 0x8E9F, 0x8F9B, 0x9087, 0x9183,
+	0x9283, 0x9387, 0x9483, 0x9587, 0x9687, 0x9783, 0x988B, 0x998F
+};
+
+uint8 Parity[256] =
+{
+	0x44, 0x00, 0x00, 0x04, 0x00, 0x04, 0x04, 0x00,
+	0x00, 0x04, 0x04, 0x00, 0x04, 0x00, 0x00, 0x04,
+	0x00, 0x04, 0x04, 0x00, 0x04, 0x00, 0x00, 0x04,
+	0x04, 0x00, 0x00, 0x04, 0x00, 0x04, 0x04, 0x00,
+	0x00, 0x04, 0x04, 0x00, 0x04, 0x00, 0x00, 0x04,
+	0x04, 0x00, 0x00, 0x04, 0x00, 0x04, 0x04, 0x00,
+	0x04, 0x00, 0x00, 0x04, 0x00, 0x04, 0x04, 0x00,
+	0x00, 0x04, 0x04, 0x00, 0x04, 0x00, 0x00, 0x04,
+	0x00, 0x04, 0x04, 0x00, 0x04, 0x00, 0x00, 0x04,
+	0x04, 0x00, 0x00, 0x04, 0x00, 0x04, 0x04, 0x00,
+	0x04, 0x00, 0x00, 0x04, 0x00, 0x04, 0x04, 0x00,
+	0x00, 0x04, 0x04, 0x00, 0x04, 0x00, 0x00, 0x04,
+	0x04, 0x00, 0x00, 0x04, 0x00, 0x04, 0x04, 0x00,
+	0x00, 0x04, 0x04, 0x00, 0x04, 0x00, 0x00, 0x04,
+	0x00, 0x04, 0x04, 0x00, 0x04, 0x00, 0x00, 0x04,
+	0x04, 0x00, 0x00, 0x04, 0x00, 0x04, 0x04, 0x00,
+	0x80, 0x84, 0x84, 0x80, 0x84, 0x80, 0x80, 0x84,
+	0x84, 0x80, 0x80, 0x84, 0x80, 0x84, 0x84, 0x80,
+	0x84, 0x80, 0x80, 0x84, 0x80, 0x84, 0x84, 0x80,
+	0x80, 0x84, 0x84, 0x80, 0x84, 0x80, 0x80, 0x84,
+	0x84, 0x80, 0x80, 0x84, 0x80, 0x84, 0x84, 0x80,
+	0x80, 0x84, 0x84, 0x80, 0x84, 0x80, 0x80, 0x84,
+	0x80, 0x84, 0x84, 0x80, 0x84, 0x80, 0x80, 0x84,
+	0x84, 0x80, 0x80, 0x84, 0x80, 0x84, 0x84, 0x80,
+	0x84, 0x80, 0x80, 0x84, 0x80, 0x84, 0x84, 0x80,
+	0x80, 0x84, 0x84, 0x80, 0x84, 0x80, 0x80, 0x84,
+	0x80, 0x84, 0x84, 0x80, 0x84, 0x80, 0x80, 0x84,
+	0x84, 0x80, 0x80, 0x84, 0x80, 0x84, 0x84, 0x80,
+	0x80, 0x84, 0x84, 0x80, 0x84, 0x80, 0x80, 0x84,
+	0x84, 0x80, 0x80, 0x84, 0x80, 0x84, 0x84, 0x80,
+	0x84, 0x80, 0x80, 0x84, 0x80, 0x84, 0x84, 0x80,
+	0x80, 0x84, 0x84, 0x80, 0x84, 0x80, 0x80, 0x84
+};
+
+union cpu_register
+{
+	uint16 Value;
+	struct
+	{
+		uint8 LowByte;
+		uint8 HighByte;
+	};
+};
+
+struct cpu
+{
+	union
+	{
+		cpu_register AF;
+		struct
+		{
+			uint8 F;
+			uint8 A;
+		};
+	};
+	union
+	{
+		cpu_register BC;
+		struct
+		{
+			uint8 C;
+			uint8 B;
+		};
+	};
+	union
+	{
+		cpu_register DE;
+		struct
+		{
+			uint8 E;
+			uint8 D;
+		};
+	};
+	union
+	{
+		cpu_register HL;
+		struct
+		{
+			uint8 L;
+			uint8 H;
+		};
+	};
+
+	cpu_register _AF;
+	cpu_register _BC;
+	cpu_register _DE;
+	cpu_register _HL;
+
+
+	uint16 StackPointer;
+	cpu_register ProgramCounter;
+	uint8 IFF0;
+	uint8 IFF2;
+
+	bool Halt;
+
+	uint8 Opcode;
+};
+
+cpu Z80 = {0};
+uint8 Memory[MEMORY_SIZE] = {0};
+void CPU_ED(void);
+void CPU_CB(void);
+void CPU_DD(void);
+void CPU_FD(void);
+
+// TODO: Temporal?
+void JP_Addr(void);
+void JR_d(void);
+void RET(void);
+void CALL_Addr(void);
+void JP_p_Addr(void);
+
+void CPUDebug(void)
+{
+	int x = 0;
+}
+
+uint8 CPU_ReadMemory8(uint16 Address)
+{
+	return Memory[Address];
+}
+
+uint16 CPU_ReadMemory16(uint16 Address)
+{
+	return (Memory[Address + 1] << 8) | Memory[Address];
+}
+
+void CPU_WriteMemory(uint16 Address, uint8 Value)
+{
+	Memory[Address] = Value;
+}
+
+void Flags_INC(uint8 Value)
+{
+	Z80.F = ((Z80.F & CARRYFLAG)
+		| (Value & SIGNFLAG)
+		| (Value == 0x80 ? OVERFLOWFLAG : 0)
+		| ((Value & 0xF) == 0 ? HALFCARRYFLAG : 0)
+		| (Value ? 0 : ZEROFLAG)
+		);
+}
+
+void Flags_DEC(uint8 Value)
+{
+	Z80.F = (NEGATIVEFLAG
+		| (Z80.F & CARRYFLAG)
+		| (Value == 0x7F ? OVERFLOWFLAG : 0)
+		| ((Value & 0x0F) == 0x0F ? HALFCARRYFLAG : 0)
+		| (Value & SIGNFLAG)
+		| (Value ? 0 : ZEROFLAG)
+		);
+}
+
+void EX(cpu_register *Value1, cpu_register *Value2)
+{
+	cpu_register *Temporal;
+	Temporal = Value1;
+	Value1 = Value2;
+	Value2 = Temporal;
+}
+
+void LD_m16(cpu_register *Register)
+{
+	uint16 Address = CPU_ReadMemory16(Z80.ProgramCounter.Value);
+	Z80.ProgramCounter.Value += 2;
+	CPU_WriteMemory(Address, Register->LowByte);
+	CPU_WriteMemory(Address + 1, Register->HighByte);
+}
+
+void AND(uint8 Value)
+{
+	Z80.A &= Value;
+	Z80.F = (HALFCARRYFLAG | Parity[Z80.A]);
+}
+
+void ADD(uint8 Value)
+{
+	uint16 Temporal = Z80.A + Value;
+
+	Z80.F = ((~(Z80.A ^ Value) & (Value ^ Temporal) & 0x80 ? OVERFLOWFLAG : 0)
+		| (Temporal >> 8)
+		| (Temporal & SIGNFLAG)
+		| ((Temporal & 0xFF) ? 0 : ZEROFLAG)
+		| ((Z80.A ^ Value ^ Temporal) & HALFCARRYFLAG)
+	);
+	Z80.A = (uint8) Temporal;
+}
+
+void ADC(uint8 Value)
+{
+	uint16 Temporal = Z80.A + Value + (Z80.F & CARRYFLAG);
+
+	Z80.F = ((~(Z80.A ^ Value) & (Value ^ Temporal) & 0x80 ? OVERFLOWFLAG : 0)
+		| (Temporal >> 8)
+		| (Temporal & SIGNFLAG)
+		| ((Temporal & 0xFF) ? 0 : ZEROFLAG)
+		| ((Z80.A ^ Value ^ Temporal) & HALFCARRYFLAG)
+		);
+	Z80.A = (uint8) Temporal;
+}
+
+void ADD16(cpu_register *Destination, uint16 Value)
+{
+	uint16 Temporal = Destination->Value;
+	Destination->Value += Value;
+
+	Z80.F = (Z80.F & (SIGNFLAG | ZEROFLAG | OVERFLOWFLAG));
+	if (Temporal > Destination->Value)
+	{
+		Z80.F |= CARRYFLAG;
+	}
+
+	if ((Temporal ^ Value ^ Destination->Value) & 0x1000)
+	{
+		Z80.F |= HALFCARRYFLAG;
+	}
+}
+
+void SUB(uint8 Value)
+{
+	uint16 Temporal = Z80.A - Value;
+
+	Z80.F = (((Z80.A ^ Value) & (Z80.A ^ Temporal) & 0x80 ? OVERFLOWFLAG : 0)
+		| NEGATIVEFLAG
+		| -(Temporal >> 8)
+		| (Temporal & SIGNFLAG)
+		| ((Temporal & 0xFF) ? 0 : ZEROFLAG)
+		| ((Z80.A ^ Value ^ Temporal) & HALFCARRYFLAG)
+		);
+	Z80.A = (uint8) Temporal;
+}
+
+void SBC(uint8 Value)
+{
+	uint16 Temporal = Z80.A - Value - (Z80.F & CARRYFLAG);
+
+	Z80.F = (((Z80.A ^ Value) & (Z80.A ^ Temporal) & 0x80 ? OVERFLOWFLAG : 0)
+		| NEGATIVEFLAG
+		| -(Temporal >> 8)
+		| (Temporal & SIGNFLAG)
+		| ((Temporal & 0xFF) ? 0 : ZEROFLAG)
+		| ((Z80.A ^ Value ^ Temporal) & HALFCARRYFLAG)
+		);
+	Z80.A = (uint8) Temporal;
+}
+
+void CP(uint8 Value)
+{
+	uint16 Temporal = Z80.A - Value;
+
+	Z80.F = (((Z80.A ^ Value) & (Z80.A ^ Temporal) & 0x80 ? OVERFLOWFLAG : 0)
+		| NEGATIVEFLAG
+		| -(Temporal >> 8)
+		| (Temporal & SIGNFLAG)
+		| ((Temporal & 0xFF) ? 0 : ZEROFLAG)
+		| ((Z80.A ^ Value ^ Temporal) & HALFCARRYFLAG)
+		);
+}
+
+void POP(cpu_register *Register)
+{
+	Register->Value = CPU_ReadMemory16(Z80.StackPointer);
+	Z80.StackPointer += 2;
+}
+
+void PUSH(cpu_register *Register)
+{
+	CPU_WriteMemory(--Z80.StackPointer, Register->HighByte);
+	CPU_WriteMemory(--Z80.StackPointer, Register->LowByte);
+}
+
+void RST(uint16 Address)
+{
+	CPU_WriteMemory(--Z80.StackPointer, Z80.ProgramCounter.HighByte);
+	CPU_WriteMemory(--Z80.StackPointer, Z80.ProgramCounter.LowByte);
+	Z80.ProgramCounter.Value = Address;
+}
+
+void EX_SP(cpu_register *Register)
+{
+	uint16 Temporal = CPU_ReadMemory16(Z80.StackPointer);
+	CPU_WriteMemory(Z80.StackPointer--, Register->HighByte);
+	CPU_WriteMemory(Z80.StackPointer, Register->LowByte);
+	Register->Value = Temporal;
+}
+
+void XOR(uint8 Value)
+{
+	Z80.A ^= Value;
+	Z80.F = Parity[Z80.A];
+}
+
+void OR(uint8 Value)
+{
+	Z80.A |= Value;
+	Z80.F = Parity[Z80.A];
+}
+
+// 00
+void NOP(void)
+{
+
+}
+
+// 01
+void LD_BC_16(void)
+{
+	Z80.BC.Value = CPU_ReadMemory16(Z80.ProgramCounter.Value);
+	Z80.ProgramCounter.Value += 2;
+}
+
+// 02
+void LD_mBC_A(void)
+{
+	CPU_WriteMemory(Z80.BC.Value, Z80.A);
+}
+
+// 03
+void INC_BC(void)
+{
+	Z80.BC.Value++;
+}
+
+// 04
+void INC_B(void)
+{
+	Flags_INC(++Z80.B);
+}
+
+// 05
+void DEC_B(void)
+{
+	Flags_DEC(++Z80.B);
+}
+
+// 06
+void LD_B_n(void)
+{
+	Z80.B = CPU_ReadMemory8(Z80.ProgramCounter.Value++);
+}
+
+// 07
+void RLCA(void)
+{
+	Z80.F = ((Z80.F & (~CARRYFLAG & ~NEGATIVEFLAG & ~HALFCARRYFLAG))
+		| (Z80.A >> 7));
+	Z80.A = ((Z80.A << 1) | (Z80.F & CARRYFLAG));
+}
+
+// 08
+void EX_AF_AF(void)
+{
+	EX(&Z80.AF, &Z80._AF);
+}
+
+// 09
+void ADD_HL_BC(void)
+{
+	ADD16(&Z80.HL, Z80.BC.Value);
+}
+
+// 0A
+void LD_A_mBC(void)
+{
+	Z80.A = CPU_ReadMemory8(Z80.BC.Value);
+}
+
+// 0B
+void DEC_BC(void)
+{
+	Z80.BC.Value--;
+}
+
+// 0C
+void INC_C(void)
+{
+	Flags_INC(++Z80.C);
+}
+
+// 0D
+void DEC_C(void)
+{
+	Flags_DEC(--Z80.C);
+}
+
+// 0E
+void LD_C_8(void)
+{
+	Z80.C = CPU_ReadMemory8(Z80.ProgramCounter.Value++);
+}
+
+// 0F
+void RRCA(void)
+{
+	Z80.F = ((Z80.F & (~CARRYFLAG & ~NEGATIVEFLAG & ~HALFCARRYFLAG))
+		| (Z80.A & CARRYFLAG));
+	Z80.A = ((Z80.A >> 1) | (Z80.F << 7));
+}
+
+// 10
+void DJNZ_d(void)
+{
+	if (--Z80.B)
+	{
+		JR_d();
+	}
+	else
+	{
+		Z80.ProgramCounter.Value++;
+	}
+}
+
+// 11
+void LD_DE_16(void)
+{
+	Z80.DE.Value = CPU_ReadMemory16(Z80.ProgramCounter.Value);
+	Z80.ProgramCounter.Value += 2;
+}
+
+// 12
+void LD_mDE_A(void)
+{
+	CPU_WriteMemory(Z80.DE.Value, Z80.A);
+}
+
+// 13
+void INC_DE(void)
+{
+	Z80.DE.Value++;
+}
+
+// 14
+void INC_D(void)
+{
+	Flags_INC(++Z80.D);
+}
+
+// 15
+void DEC_D(void)
+{
+	Flags_DEC(--Z80.D);
+}
+
+// 16
+void LD_D_8(void)
+{
+	Z80.D = CPU_ReadMemory8(Z80.ProgramCounter.Value++);
+}
+
+// 17
+void RLA(void)
+{
+	uint16 Temporal = Z80.A << 1;
+	Z80.A = (Temporal | (Z80.F & CARRYFLAG));
+	Z80.F = ((Z80.F & (~CARRYFLAG & ~NEGATIVEFLAG & ~HALFCARRYFLAG))
+		| (Temporal >> 8));
+}
+
+// 18
+void JR_d(void)
+{
+   int8 Offset = (int8) CPU_ReadMemory8(Z80.ProgramCounter.Value);
+   Z80.ProgramCounter.Value += Offset + 1;
+}
+
+// 19
+void ADD_HL_DE(void)
+{
+	ADD16(&Z80.HL, Z80.DE.Value);
+}
+
+// 1A
+void LD_A_mDE(void)
+{
+	Z80.A = CPU_ReadMemory8(Z80.DE.Value);
+}
+
+// 1B
+void DEC_DE(void)
+{
+	Z80.DE.Value--;
+}
+
+// 1C
+void INC_E(void)
+{
+	Flags_INC(++Z80.E);
+}
+
+// 1D
+void DEC_E(void)
+{
+	Flags_DEC(--Z80.E);
+}
+
+// 1E
+void LD_E_8(void)
+{
+	Z80.E = CPU_ReadMemory8(Z80.ProgramCounter.Value++);
+}
+
+// 1F
+void RRA(void)
+{
+	uint8 Temporal = (Z80.A >> 1) | ((Z80.F << 7) & 128);
+	Z80.F = ((Z80.F & (~CARRYFLAG & ~NEGATIVEFLAG & ~HALFCARRYFLAG))
+		| (Z80.A & CARRYFLAG));
+	Z80.A = Temporal;
+}
+
+// 20
+void JR_nz_d(void)
+{
+	if (!(Z80.F & ZEROFLAG))
+	{
+		JR_d();
+	}
+	else
+	{
+		Z80.ProgramCounter.Value++;
+	}
+}
+
+// 21
+void LD_HL_16(void)
+{
+	Z80.HL.Value = CPU_ReadMemory16(Z80.ProgramCounter.Value);
+	Z80.ProgramCounter.Value += 2;
+}
+
+// 22
+void LD_m16_HL(void)
+{
+	LD_m16(&Z80.HL);
+}
+
+// 23
+void INC_HL(void)
+{
+	Z80.HL.Value++;
+}
+
+// 24
+void INC_H(void)
+{
+	Flags_INC(++Z80.H);
+}
+
+// 25
+void DEC_H(void)
+{
+	Flags_DEC(--Z80.H);
+}
+
+// 26
+void LD_H_8(void)
+{
+	Z80.H = CPU_ReadMemory8(Z80.ProgramCounter.Value++);
+}
+
+// 27
+void DAA(void)
+{
+	Z80.AF.Value = DAATable[Z80.A
+		| ((Z80.F & HALFCARRYFLAG) << 6)
+		| ((Z80.F & (NEGATIVEFLAG | CARRYFLAG)) << 8)
+	];
+}
+
+// 28
+void JR_Z(void)
+{
+	if (Z80.F & ZEROFLAG)
+	{
+		JR_d();
+	}
+	else
+	{
+		Z80.ProgramCounter.Value++;
+	}
+}
+
+// 29
+void ADD_HL_HL(void)
+{
+	ADD16(&Z80.HL, Z80.HL.Value);
+}
+
+// 2A
+void LD_HL_m16(void)
+{
+	LD_m16(&Z80.HL);
+}
+
+// 2B
+void DEC_HL(void)
+{
+	Z80.HL.Value--;
+}
+
+// 2C
+void INC_L(void)
+{
+	Flags_INC(++Z80.L);
+}
+
+// 2D
+void DEC_L(void)
+{
+	Flags_DEC(--Z80.L);
+}
+
+// 2E
+void LD_L_8(void)
+{
+	Z80.L = CPU_ReadMemory8(Z80.ProgramCounter.Value++);
+}
+
+// 2F
+void CPL(void)
+{
+	Z80.AF.Value = ((Z80.AF.Value ^ 0xFF00) | (HALFCARRYFLAG | NEGATIVEFLAG));
+}
+
+// 30
+void JR_NC(void)
+{
+	if (!(Z80.F & CARRYFLAG))
+	{
+		JR_d();
+	}
+	else
+	{
+		Z80.ProgramCounter.Value++;
+	}
+}
+
+// 31
+void LD_SP_16(void)
+{
+	Z80.StackPointer = CPU_ReadMemory16(Z80.ProgramCounter.Value);
+	Z80.ProgramCounter.Value += 2;
+}
+
+// 32
+void LD_m16_A(void)
+{
+	uint16 Address = CPU_ReadMemory16(Z80.ProgramCounter.Value);
+	Z80.ProgramCounter.Value += 2;
+	CPU_WriteMemory(Address, Z80.A);
+}
+
+// 33
+void INC_SP(void)
+{
+	Z80.StackPointer++;
+}
+
+// 34
+void INC_mHL(void)
+{
+	uint8 Value = CPU_ReadMemory8(Z80.HL.Value);
+	Flags_INC(++Value);
+	CPU_WriteMemory(Z80.HL.Value, Value);
+}
+
+// 35
+void DEC_mHL(void)
+{
+	uint8 Value = CPU_ReadMemory8(Z80.HL.Value);
+	Flags_DEC(--Value);
+	CPU_WriteMemory(Z80.HL.Value, Value);
+}
+
+// 36
+void LD_mHL_8(void)
+{
+	uint8 Value = CPU_ReadMemory8(Z80.ProgramCounter.Value++);
+	CPU_WriteMemory(Z80.HL.Value, Value);
+}
+
+// 37
+void SCF(void)
+{
+	Z80.F = ((Z80.F | CARRYFLAG) & (~NEGATIVEFLAG & ~HALFCARRYFLAG));
+}
+
+// 38
+void JR_C(void)
+{
+	if (Z80.F & CARRYFLAG)
+	{
+		JR_d();
+	}
+	else
+	{
+		Z80.ProgramCounter.Value++;
+	}
+}
+
+// 39
+void ADD_HL_SP(void)
+{
+	ADD16(&Z80.HL, Z80.StackPointer);
+}
+
+// 3A
+void LD_A_m16(void)
+{
+	uint16 Address = CPU_ReadMemory16(Z80.ProgramCounter.Value);
+	Z80.ProgramCounter.Value += 2;
+	Z80.A = CPU_ReadMemory8(Address);
+}
+
+// 3B
+void DEC_SP(void)
+{
+	Z80.StackPointer--;
+}
+
+// 3C
+void INC_A(void)
+{
+	Flags_INC(++Z80.A);
+}
+
+// 3D
+void DEC_A(void)
+{
+	Flags_DEC(--Z80.A);
+}
+
+// 3E
+void LD_A_8(void)
+{
+	Z80.A = CPU_ReadMemory8(Z80.ProgramCounter.Value++);
+}
+
+// 3F
+void CCF(void)
+{
+	uint8 Temporal = (Z80.F & CARRYFLAG) << 4;
+	Z80.F = (((Z80.F ^ CARRYFLAG) & (~NEGATIVEFLAG & ~HALFCARRYFLAG)) | Temporal);
+}
+
+// 40
+void LD_B_B(void)
+{
+
+}
+
+// 41
+void LD_B_C(void)
+{
+	Z80.B = Z80.C;
+}
+
+// 42
+void LD_B_D(void)
+{
+	Z80.B = Z80.D;
+}
+
+// 43
+void LD_B_E(void)
+{
+	Z80.B = Z80.E;
+}
+
+// 44
+void LD_B_H(void)
+{
+	Z80.B = Z80.H;
+}
+
+// 45
+void LD_B_L(void)
+{
+	Z80.B = Z80.L;
+}
+
+// 46
+void LD_B_mHL(void)
+{
+	Z80.B = CPU_ReadMemory8(Z80.HL.Value);
+}
+
+// 47
+void LD_B_A(void)
+{
+	Z80.B = Z80.A;
+}
+
+// 48
+void LD_C_B(void)
+{
+	Z80.C = Z80.B;
+}
+
+// 49
+void LD_C_C(void)
+{
+
+}
+
+// 4A
+void LD_C_D(void)
+{
+	Z80.C = Z80.D;
+}
+
+// 4B
+void LD_C_E(void)
+{
+	Z80.C = Z80.E;
+}
+
+// 4C
+void LD_C_H(void)
+{
+	Z80.C = Z80.H;
+}
+
+// 4D
+void LD_C_L(void)
+{
+	Z80.C = Z80.L;
+}
+
+// 4E
+void LD_C_mHL(void)
+{
+	Z80.C = CPU_ReadMemory8(Z80.HL.Value);
+}
+
+// 4F
+void LD_C_A(void)
+{
+	Z80.C = Z80.A;
+}
+
+// 50
+void LD_D_B(void)
+{
+	Z80.D = Z80.B;
+}
+
+// 51
+void LD_D_C(void)
+{
+	Z80.D = Z80.C;
+}
+
+// 52
+void LD_D_D(void)
+{
+
+}
+
+// 53
+void LD_D_E(void)
+{
+	Z80.D = Z80.E;
+}
+
+// 54
+void LD_D_H(void)
+{
+	Z80.D = Z80.H;
+}
+
+// 55
+void LD_D_L(void)
+{
+	Z80.D = Z80.L;
+}
+
+// 56
+void LD_D_mHL(void)
+{
+	Z80.D = CPU_ReadMemory8(Z80.HL.Value);
+}
+
+// 57
+void LD_D_A(void)
+{
+	Z80.D = Z80.A;
+}
+
+// 58
+void LD_E_B(void)
+{
+	Z80.E = Z80.B;
+}
+
+// 59
+void LD_E_C(void)
+{
+	Z80.E = Z80.C;
+}
+
+// 5A
+void LD_E_D(void)
+{
+	Z80.E = Z80.D;
+}
+
+// 5B
+void LD_E_E(void)
+{
+
+}
+
+// 5C
+void LD_E_H(void)
+{
+	Z80.E = Z80.H;
+}
+
+// 5D
+void LD_E_L(void)
+{
+	Z80.E = Z80.L;
+}
+
+// 5E
+void LD_E_mHL(void)
+{
+	Z80.E = CPU_ReadMemory8(Z80.HL.Value);
+}
+
+// 5F
+void LD_E_A(void)
+{
+	Z80.E = Z80.A;
+}
+
+// 60
+void LD_H_B(void)
+{
+	Z80.H = Z80.B;
+}
+
+// 61
+void LD_H_C(void)
+{
+	Z80.H = Z80.C;
+}
+
+// 62
+void LD_H_D(void)
+{
+	Z80.H = Z80.D;
+}
+
+// 63
+void LD_H_E(void)
+{
+	Z80.H = Z80.E;
+}
+
+// 64
+void LD_H_H(void)
+{
+
+}
+
+// 65
+void LD_H_L(void)
+{
+	Z80.H = Z80.L;
+}
+
+// 66
+void LD_H_mHL(void)
+{
+	Z80.H = CPU_ReadMemory8(Z80.HL.Value);
+}
+
+// 67
+void LD_H_A(void)
+{
+	Z80.H = Z80.A;
+}
+
+// 68
+void LD_L_B(void)
+{
+	Z80.L = Z80.B;
+}
+
+// 69
+void LD_L_C(void)
+{
+	Z80.L = Z80.C;
+}
+
+// 6A
+void LD_L_D(void)
+{
+	Z80.L = Z80.D;
+}
+
+// 6B
+void LD_L_E(void)
+{
+	Z80.L = Z80.E;
+}
+
+// 6C
+void LD_L_H(void)
+{
+	Z80.L = Z80.H;
+}
+
+// 6D
+void LD_L_L(void)
+{
+
+}
+
+// 6E
+void LD_L_mHL(void)
+{
+	Z80.L = CPU_ReadMemory8(Z80.HL.Value);
+}
+
+// 6F
+void LD_L_A(void)
+{
+	Z80.L = Z80.A;
+}
+
+// 70
+void LD_mHL_B(void)
+{
+	CPU_WriteMemory(Z80.HL.Value, Z80.B);
+}
+
+// 71
+void LD_mHL_C(void)
+{
+	CPU_WriteMemory(Z80.HL.Value, Z80.C);
+}
+
+// 72
+void LD_mHL_D(void)
+{
+	CPU_WriteMemory(Z80.HL.Value, Z80.D);
+}
+
+// 73
+void LD_mHL_E(void)
+{
+	CPU_WriteMemory(Z80.HL.Value, Z80.E);
+}
+
+// 74
+void LD_mHL_H(void)
+{
+	CPU_WriteMemory(Z80.HL.Value, Z80.H);
+}
+
+// 75
+void LD_mHL_L(void)
+{
+	CPU_WriteMemory(Z80.HL.Value, Z80.L);
+}
+
+// 76
+void HALT(void)
+{
+	Z80.Halt = true;
+	Z80.ProgramCounter.Value--;
+}
+
+// 77
+void LD_mHL_A(void)
+{
+	CPU_WriteMemory(Z80.HL.Value, Z80.A);
+}
+
+// 78
+void LD_A_B(void)
+{
+	Z80.A = Z80.B;
+}
+
+// 79
+void LD_A_C(void)
+{
+	Z80.A = Z80.C;
+}
+
+// 7A
+void LD_A_D(void)
+{
+	Z80.A = Z80.D;
+}
+
+// 7B
+void LD_A_E(void)
+{
+	Z80.A = Z80.E;
+}
+
+// 7C
+void LD_A_H(void)
+{
+	Z80.A = Z80.H;
+}
+
+// 7D
+void LD_A_L(void)
+{
+	Z80.A = Z80.L;
+}
+
+// 7E
+void LD_A_mHL(void)
+{
+	Z80.A = CPU_ReadMemory8(Z80.HL.Value);
+}
+
+// 7F
+void LD_A_A(void)
+{
+
+}
+
+// 80
+void ADD_B(void)
+{
+	ADD(Z80.B);
+}
+
+// 81
+void ADD_C(void)
+{
+	ADD(Z80.C);
+}
+
+// 82
+void ADD_D(void)
+{
+	ADD(Z80.D);
+}
+
+// 83
+void ADD_E(void)
+{
+	ADD(Z80.E);
+}
+
+// 84
+void ADD_H(void)
+{
+	ADD(Z80.H);
+}
+
+// 85
+void ADD_L(void)
+{
+	ADD(Z80.L);
+}
+
+// 86
+void ADD_mHL(void)
+{
+	ADD(CPU_ReadMemory8(Z80.HL.Value));
+}
+
+// 87
+void ADD_A(void)
+{
+	ADD(Z80.A);
+}
+
+// 88
+void ADC_B(void)
+{
+	ADC(Z80.B);
+}
+
+// 89
+void ADC_C(void)
+{
+	ADC(Z80.C);
+}
+
+// 8A
+void ADC_D(void)
+{
+	ADC(Z80.D);
+}
+
+// 8B
+void ADC_E(void)
+{
+	ADC(Z80.E);
+}
+
+// 8C
+void ADC_H(void)
+{
+	ADC(Z80.H);
+}
+
+// 8D
+void ADC_L(void)
+{
+	ADC(Z80.L);
+}
+
+// 8E
+void ADC_mHL(void)
+{
+	ADC(CPU_ReadMemory8(Z80.HL.Value));
+}
+
+// 8F
+void ADC_A(void)
+{
+	ADC(Z80.A);
+}
+
+// 90
+void SUB_B(void)
+{
+	SUB(Z80.B);
+}
+
+// 91
+void SUB_C(void)
+{
+	SUB(Z80.C);
+}
+
+// 92
+void SUB_D(void)
+{
+	SUB(Z80.D);
+}
+
+// 93
+void SUB_E(void)
+{
+	SUB(Z80.E);
+}
+
+// 94
+void SUB_H(void)
+{
+	SUB(Z80.H);
+}
+
+// 95
+void SUB_L(void)
+{
+	SUB(Z80.L);
+}
+
+// 96
+void SUB_mHL(void)
+{
+	SUB(CPU_ReadMemory8(Z80.HL.Value));
+}
+
+// 97
+void SUB_A(void)
+{
+	SUB(Z80.A);
+}
+
+// 98
+void SBC_B(void)
+{
+	SBC(Z80.B);
+}
+
+// 99
+void SBC_C(void)
+{
+	SBC(Z80.C);
+}
+
+// 9A
+void SBC_D(void)
+{
+	SBC(Z80.D);
+}
+
+// 9B
+void SBC_E(void)
+{
+	SBC(Z80.E);
+}
+
+// 9C
+void SBC_H(void)
+{
+	SBC(Z80.H);
+}
+
+// 9D
+void SBC_L(void)
+{
+	SBC(Z80.L);
+}
+
+// 9E
+void SBC_mHL(void)
+{
+	SBC(CPU_ReadMemory8(Z80.HL.Value));
+}
+
+// 9F
+void SBC_A(void)
+{
+	SBC(Z80.A);
+}
+
+// A0
+void AND_B(void)
+{
+	AND(Z80.B);
+}
+
+// A1
+void AND_C(void)
+{
+	AND(Z80.C);
+}
+
+// A2
+void AND_D(void)
+{
+	AND(Z80.D);
+}
+
+// A3
+void AND_E(void)
+{
+	AND(Z80.E);
+}
+
+// A4
+void AND_H(void)
+{
+	AND(Z80.H);
+}
+
+// A5
+void AND_L(void)
+{
+	AND(Z80.L);
+}
+
+// A6
+void AND_mHL(void)
+{
+	AND(CPU_ReadMemory8(Z80.HL.Value));
+}
+
+// A7
+void AND_A(void)
+{
+	AND(Z80.A);
+}
+
+// A8
+void XOR_B(void)
+{
+	XOR(Z80.B);
+}
+
+// A9
+void XOR_C(void)
+{
+	XOR(Z80.C);
+}
+
+// AA
+void XOR_D(void)
+{
+	XOR(Z80.D);
+}
+
+// AB
+void XOR_E(void)
+{
+	XOR(Z80.E);
+}
+
+// AC
+void XOR_H(void)
+{
+	XOR(Z80.H);
+}
+
+// AD
+void XOR_L(void)
+{
+	XOR(Z80.L);
+}
+
+// AE
+void XOR_mHL(void)
+{
+	XOR(CPU_ReadMemory8(Z80.HL.Value));
+}
+
+// AF
+void XOR_A(void)
+{
+	XOR(Z80.A);
+}
+
+// B0
+void OR_B(void)
+{
+	OR(Z80.B);
+}
+
+// B1
+void OR_C(void)
+{
+	OR(Z80.C);
+}
+
+// B2
+void OR_D(void)
+{
+	OR(Z80.D);
+}
+
+// B3
+void OR_E(void)
+{
+	OR(Z80.E);
+}
+
+// B4
+void OR_H(void)
+{
+	OR(Z80.H);
+}
+
+// B5
+void OR_L(void)
+{
+	OR(Z80.L);
+}
+
+// B6
+void OR_mHL(void)
+{
+	OR(CPU_ReadMemory8(Z80.HL.Value));
+}
+
+// B7
+void OR_A(void)
+{
+	OR(Z80.A);
+}
+
+// B8
+void CP_B(void)
+{
+	CP(Z80.B);
+}
+
+// B9
+void CP_C(void)
+{
+	CP(Z80.C);
+}
+
+// BA
+void CP_D(void)
+{
+	CP(Z80.D);
+}
+
+// BB
+void CP_E(void)
+{
+	CP(Z80.E);
+}
+
+// BC
+void CP_H(void)
+{
+	CP(Z80.H);
+}
+
+// BD
+void CP_L(void)
+{
+	CP(Z80.L);
+}
+
+// BE
+void CP_mHL(void)
+{
+	CP(CPU_ReadMemory8(Z80.HL.Value));
+}
+
+// BF
+void CP_A(void)
+{
+	CP(Z80.A);
+}
+
+// C0
+void RET_NZ(void)
+{
+	if (!(Z80.F & ZEROFLAG))
+	{
+		RET();
+	}
+	else
+	{
+		// TODO: Cycles?
+	}
+}
+
+// C1
+void POP_BC(void)
+{
+	POP(&Z80.BC);
+}
+
+// C2
+void JP_NZ(void)
+{
+	if (!(Z80.F & ZEROFLAG))
+	{
+		JP_Addr();
+	}
+	else
+	{
+		Z80.ProgramCounter.Value += 2;
+	}
+}
+
+// C3
+void JP_Addr(void)
+{
+	Z80.ProgramCounter.Value = CPU_ReadMemory16(Z80.ProgramCounter.Value);
+}
+
+// C4
+void CALL_NZ(void)
+{
+	if (!(Z80.F & ZEROFLAG))
+	{
+		CALL_Addr();
+	}
+	else
+	{
+		Z80.ProgramCounter.Value += 2;
+	}
+}
+
+// C5
+void PUSH_BC(void)
+{
+	PUSH(&Z80.BC);
+}
+
+// C6
+void ADD_8(void)
+{
+	ADD(CPU_ReadMemory8(Z80.ProgramCounter.Value++));
+}
+
+// C7
+void RST00(void)
+{
+	RST(0x0000);
+}
+
+// C8
+void RET_Z(void)
+{
+	if (Z80.F & ZEROFLAG)
+	{
+		RET();
+	}
+	else
+	{
+		// TODO: Cycles?
+	}
+}
+
+// C9
+void RET(void)
+{
+	Z80.ProgramCounter.Value = CPU_ReadMemory16(Z80.StackPointer);
+	Z80.StackPointer += 2;
+}
+
+// CA
+void JP_Z(void)
+{
+	if (Z80.F & ZEROFLAG)
+	{
+		JP_p_Addr();
+	}
+	else
+	{
+		Z80.ProgramCounter.Value += 2;
+	}
+}
+
+// CC
+void CALL_Z(void)
+{
+	if (Z80.F & ZEROFLAG)
+	{
+		CALL_Addr();
+	}
+	else
+	{
+		Z80.ProgramCounter.Value += 2;
+	}
+}
+
+// CD
+void CALL_Addr(void)
+{
+	uint16 Destination = CPU_ReadMemory16(Z80.ProgramCounter.Value);
+	Z80.ProgramCounter.Value += 2;
+	CPU_WriteMemory(--Z80.StackPointer, Z80.ProgramCounter.HighByte);
+	CPU_WriteMemory(--Z80.StackPointer, Z80.ProgramCounter.LowByte);
+	Z80.ProgramCounter.Value = Destination;
+}
+
+// CE
+void ADC_8(void)
+{
+	ADC(CPU_ReadMemory8(Z80.ProgramCounter.Value++));
+}
+
+// CF
+void RST08(void)
+{
+	RST(0x0008);
+}
+
+// D0
+void RET_NC(void)
+{
+	if (!(Z80.F & CARRYFLAG))
+	{
+		RET();
+	}
+	else
+	{
+		// TODO: Cycles?
+	}
+}
+
+// D1
+void POP_DE(void)
+{
+	POP(&Z80.DE);
+}
+
+// D2
+void JP_NC(void)
+{
+	if (!(Z80.F & CARRYFLAG))
+	{
+		JP_Addr();
+	}
+	else
+	{
+		Z80.ProgramCounter.Value += 2;
+	}
+}
+
+// D3
+void OUT_mn_A(void)
+{
+	// TODO: OUT
+}
+
+// D4
+void CALL_NC(void)
+{
+	if (!(Z80.F & CARRYFLAG))
+	{
+		CALL_Addr();
+	}
+	else
+	{
+		Z80.ProgramCounter.Value += 2;
+	}
+}
+
+// D5
+void PUSH_DE(void)
+{
+	PUSH(&Z80.DE);
+}
+
+// D6
+void SUB_8(void)
+{
+	SUB(CPU_ReadMemory8(Z80.ProgramCounter.Value++));
+}
+
+// D7
+void RST10(void)
+{
+	RST(0x0010);
+}
+
+// D8
+void RET_C(void)
+{
+	if (Z80.F & CARRYFLAG)
+	{
+		RET();
+	}
+	else
+	{
+		// TODO: Cycles?
+	}
+}
+
+// D9
+void EXX(void)
+{
+	cpu_register Temporal = Z80._BC;
+	Z80._BC = Z80.BC;
+	Z80.BC = Temporal;
+
+	Temporal = Z80._DE;
+	Z80._DE = Z80.DE;
+	Z80.DE = Temporal;
+
+	Temporal = Z80._HL;
+	Z80._HL = Z80.HL;
+	Z80.HL = Temporal;
+}
+
+// DA
+void JP_C(void)
+{
+	if (Z80.F & CARRYFLAG)
+	{
+		JP_Addr();
+	}
+	else
+	{
+		Z80.ProgramCounter.Value += 2;
+	}
+}
+// DB
+void INA(void)
+{
+	// TODO: IN
+}
+
+ // DC
+void CALL_C(void)
+{
+	if (Z80.F & CARRYFLAG)
+	{
+		CALL_Addr();
+	}
+	else
+	{
+		Z80.ProgramCounter.Value += 2;
+	}
+}
+
+// DE
+void SBC_8(void)
+{
+	SBC(CPU_ReadMemory8(Z80.ProgramCounter.Value++));
+}
+
+// DF
+void RST18(void)
+{
+	RST(0x0018);
+}
+
+// E0
+void RET_PO(void)
+{
+	if (!(Z80.F & PARITYFLAG))
+	{
+		RET();
+	}
+	else
+	{
+		// TODO: Cycles?
+	}
+}
+
+// E1
+void POP_HL(void)
+{
+	POP(&Z80.HL);
+}
+
+// E2
+void JP_PO(void)
+{
+	if (!(Z80.F & PARITYFLAG))
+	{
+		JP_Addr();
+	}
+	else
+	{
+		Z80.ProgramCounter.Value += 2;
+	}
+}
+
+// E3
+void EX_mSP_HL(void)
+{
+	EX_SP(&Z80.HL);
+}
+
+// E4
+void CALL_PO(void)
+{
+	if (!(Z80.F & PARITYFLAG))
+	{
+		CALL_Addr();
+	}
+	else
+	{
+		Z80.ProgramCounter.Value += 2;
+	}
+}
+
+// E5
+void PUSH_HL(void)
+{
+	PUSH(&Z80.HL);
+}
+
+// E6
+void AND_8(void)
+{
+	AND(CPU_ReadMemory8(Z80.ProgramCounter.Value++));
+}
+
+// E7
+void RST20(void)
+{
+	RST(0x0020);
+}
+
+// E8
+void RET_PE(void)
+{
+	if (Z80.F & PARITYFLAG)
+	{
+		RET();
+	}
+	else
+	{
+		// TODO: Cycles
+	}
+}
+
+// E9
+void LD_PC_HL(void)
+{
+	Z80.ProgramCounter.Value = Z80.HL.Value;
+}
+
+// EA
+void JP_PE(void)
+{
+	if (!(Z80.F & PARITYFLAG))
+	{
+		JP_Addr();
+	}
+	else
+	{
+		Z80.ProgramCounter.Value += 2;
+	}
+}
+
+// EB
+void EX_DE_HL(void)
+{
+	EX(&Z80.DE, &Z80.HL);
+}
+
+// EC
+void CALL_PE(void)
+{
+	if (Z80.F & PARITYFLAG)
+	{
+		CALL_Addr();
+	}
+	else
+	{
+		Z80.ProgramCounter.Value += 2;
+	}
+}
+
+// EE
+void XOR_8(void)
+{
+	XOR(CPU_ReadMemory8(Z80.ProgramCounter.Value++));
+}
+
+// EF
+void RST28(void)
+{
+	RST(0x0028);
+}
+
+// F0
+void RET_P(void)
+{
+	if (!(Z80.F & SIGNFLAG))
+	{
+		RET();
+	}
+	else
+	{
+		 // TODO: Cycles?
+	}
+}
+
+// F1
+void POP_AF(void)
+{
+	POP(&Z80.AF);
+}
+
+// F2
+void JP_p_Addr(void)
+{
+	if (!(Z80.F & SIGNFLAG))
+	{
+		JP_Addr();
+	}
+	else
+	{
+		Z80.ProgramCounter.Value += 2;
+	}
+}
+
+// F3
+void DI(void)
+{
+	Z80.IFF0 = 0;
+	Z80.IFF2 = 0;
+}
+
+// F4
+void CALL_P(void)
+{
+	if (!(Z80.F & SIGNFLAG))
+	{
+		CALL_Addr();
+	}
+	else
+	{
+		Z80.ProgramCounter.Value += 2;
+	}
+}
+
+// F5
+void PUSH_AF(void)
+{
+	PUSH(&Z80.AF);
+}
+
+// F6
+void OR_8(void)
+{
+	OR(CPU_ReadMemory8(Z80.ProgramCounter.Value++));
+}
+
+// F7
+void RST30(void)
+{
+	RST(0x0030);
+}
+
+// F8
+void RET_M(void)
+{
+	if (Z80.F & SIGNFLAG)
+	{
+		RET();
+	}
+	else
+	{
+		// TODO: Cycles?
+	}
+}
+
+// F9
+void LD_SP_HL(void)
+{
+	Z80.StackPointer = Z80.HL.Value;
+}
+
+// FA
+void JP_M(void)
+{
+	if (Z80.F & SIGNFLAG)
+	{
+		JP_Addr();
+	}
+	else
+	{
+		Z80.ProgramCounter.Value += 2;
+	}
+}
+
+// FB
+void EI(void)
+{
+	// TODO: Z80.EI = 2;
+}
+
+// FC
+void CALL_M(void)
+{
+	if (Z80.F & SIGNFLAG)
+	{
+		CALL_Addr();
+	}
+	else
+	{
+		Z80.ProgramCounter.Value += 2;
+	}
+}
+
+// FE
+void CP_8(void)
+{
+	CP(CPU_ReadMemory8(Z80.ProgramCounter.Value++));
+}
+
+// FF
+void RST38(void)
+{
+	RST(0x0038);
+}
+
+uint8 CPU_Fetch(void)
+{
+	return Memory[Z80.ProgramCounter.Value++];
+}
+
+void (*Z80Main[256])() =
+{
+	NOP, LD_BC_16, LD_mBC_A, INC_BC, INC_B, DEC_B, LD_B_n, RLCA,					// 0-7
+	EX_AF_AF, ADD_HL_BC, LD_A_mBC, DEC_BC, INC_C, DEC_C, LD_C_8, RRCA,				// 8-F
+	DJNZ_d, LD_DE_16, LD_mDE_A, INC_DE, INC_D, DEC_D, LD_D_8, RLA,					// 10-17
+	JR_d, ADD_HL_DE, LD_A_mDE, DEC_DE, INC_E, DEC_E, LD_E_8, RRA,					// 18-1F
+	JR_nz_d, LD_HL_16, LD_m16_HL, INC_HL, INC_H, DEC_H, LD_H_8, DAA,				// 20-27
+	JR_Z, ADD_HL_HL, LD_HL_m16, DEC_HL, INC_L, DEC_L, LD_L_8, CPL,					// 28-2F
+	JR_NC, LD_SP_16, LD_m16_A, INC_SP, INC_mHL, DEC_mHL, LD_mHL_8, SCF,				// 30-37
+	JR_C, ADD_HL_SP, LD_A_m16, DEC_SP, INC_A, DEC_A, LD_A_8, CCF,					// 38-3F
+	LD_B_B, LD_B_C, LD_B_D, LD_B_E, LD_B_H, LD_B_L, LD_B_mHL, LD_B_A,				// 40-47
+	LD_C_B, LD_C_C, LD_C_D, LD_C_E, LD_C_H, LD_C_L, LD_C_mHL, LD_C_A,				// 48-4F
+	LD_D_B, LD_D_C, LD_D_D, LD_D_E, LD_D_H, LD_D_L, LD_D_mHL, LD_D_A,				// 50-57
+	LD_E_B, LD_E_C, LD_E_D, LD_E_E, LD_E_H, LD_E_L, LD_E_mHL, LD_E_A,				// 58-5F
+	LD_H_B, LD_H_C, LD_H_D, LD_H_E, LD_H_H, LD_H_L, LD_H_mHL, LD_H_A,				// 60-67
+	LD_L_B, LD_L_C, LD_L_D, LD_L_E, LD_L_H, LD_L_L, LD_L_mHL, LD_L_A,				// 68-6F
+	LD_mHL_B, LD_mHL_C, LD_mHL_D, LD_mHL_E, LD_mHL_H, LD_mHL_L, HALT, LD_mHL_A,		// 70-77
+	LD_A_B, LD_A_C, LD_A_D, LD_A_E, LD_A_H, LD_A_L, LD_A_mHL, LD_A_A,				// 78-7F
+	ADD_B, ADD_C, ADD_D, ADD_E, ADD_H, ADD_L, ADD_mHL, ADD_A,						// 80-87
+	ADC_A, ADC_C, ADC_D, ADC_E, ADC_H, ADC_L, ADC_mHL, ADC_A,						// 88-8F
+	SUB_B, SUB_C, SUB_D, SUB_E, SUB_H, SUB_L, SUB_mHL, SUB_A,						// 90-97
+	SBC_B, SBC_C, SBC_D, SBC_E, SBC_H, SBC_L, SBC_mHL, SBC_A,						// 98-9F
+	AND_B, AND_C, AND_D, AND_E, AND_H, AND_L, AND_mHL, AND_A,						// A0-A7
+	XOR_B, XOR_C, XOR_D, XOR_E, XOR_H, XOR_L, XOR_mHL, XOR_A,						// A8-AF
+	OR_B, OR_C, OR_D, OR_E, OR_H, OR_L, OR_mHL, OR_A,								// B0-B7
+	CP_B, CP_C, CP_D, CP_E, CP_H, CP_L, CP_mHL, CP_A,								// B8-BF
+	RET_NZ, POP_BC, JP_NZ, JP_Addr, CALL_NZ, PUSH_BC, ADD_8, RST00,					// C0-C7
+	RET_Z, RET, JP_Z, CPU_CB, CALL_Z, CALL_Addr, ADC_8, RST08,						// C8-CF
+	RET_NC, POP_DE, JP_NC, OUT_mn_A, CALL_NC, PUSH_DE, SUB_8, RST10,				// D0-D7
+	RET_C, EXX, JP_C, INA, CALL_C, CPU_DD, SBC_8, RST18,							// D8-DF
+	RET_PO, POP_HL, JP_PO, EX_mSP_HL, CALL_PO, PUSH_HL, AND_8, RST20,				// E0-E7
+	RET_PE, LD_PC_HL, JP_PE, EX_DE_HL, CALL_PE, CPU_ED, XOR_8, RST28,				// E8-EF
+	RET_P, POP_AF, JP_p_Addr, DI, CALL_P, PUSH_AF, OR_8, RST30,						// F0-F7
+	RET_M, LD_SP_HL, JP_M, EI, CALL_M, CPU_FD, CP_8, RST38							// F8-FF
+};
+
+// 49
+void OUT_pC_C(void)
+{
+	// TODO: Z80 OUT
+}
+
+// 78
+void IN_A_pC(void)
+{
+	// TODO: Z80 IN
+}
+
+// 79
+void OUT_pC_A(void)
+{
+	// TODO: Z80 OUT
+}
+
+// TODO: Opcodes ED
+void (*Z80ED[192])() =
+{
+	CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug,	// 0-7
+	CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug,	// 8-F
+	CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug,	// 10-17
+	CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug,	// 18-1F
+	CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug,	// 20-27
+	CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug,	// 28-2F
+	CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug,	// 30-37
+	CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug,	// 38-3F
+	CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug,	// 40-47
+	CPUDebug, OUT_pC_C, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug,	// 48-4F
+	CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug,	// 50-57
+	CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug,	// 58-5F
+	CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug,	// 60-67
+	CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug,	// 68-6F
+	CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug,	// 70-77
+	IN_A_pC, OUT_pC_A, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug,	// 78-7F
+	CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug,	// 80-87
+	CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug,	// 88-8F
+	CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug,	// 90-97
+	CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug,	// 98-9F
+	CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug,	// A0-A7
+	CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug,	// A8-AF
+	CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug,	// B0-B7
+	CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug, CPUDebug	// B8-BF
+};
+
+
+void CPU_ED(void)
+{
+	Z80.Opcode = CPU_Fetch();
+	Z80ED[Z80.Opcode]();
+}
+
+void CPU_CB(void)
+{
+	// TODO: CPU_CB
+}
+
+void CPU_DD(void)
+{
+	// TODO: CPU_DD
+}
+
+void CPU_FD(void)
+{
+	// TODO: CPU_FD
+}
+
+void CPU_Cycle(void)
+{
+	Z80.Opcode = CPU_Fetch();
+	Z80Main[Z80.Opcode]();
+}
